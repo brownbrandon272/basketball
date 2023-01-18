@@ -129,12 +129,12 @@ class SeabornFig2Grid():
 
 
 class ExploreData:
-    def __init__(self, data:pd.DataFrame, target:str=None, cat_limit:float=10, default_tol:float=0.01) -> None:
+    def __init__(self, data:pd.DataFrame, target:str=None, cat_limit:int=10, default_tol:float=0.01, var_dict:dict=None) -> None:
         self.data = data
         self.target = target
         self.cat_limit = cat_limit if cat_limit > 0 else 10
         self.default_tol = default_tol if default_tol > 0 else 0.01
-        self.var_dict = self.create_var_dict(self.cat_limit)
+        self.var_dict, _ = self.var_dict_checks(var_dict=var_dict, cat_limit=self.cat_limit)
 
     def var_dict_checks(self, var_dict:dict=None, cat_limit:int=None) -> t.Tuple[dict, bool]:
         if var_dict is None: var_dict = self.create_var_dict(cat_limit=cat_limit)
@@ -146,6 +146,7 @@ class ExploreData:
             assert isinstance(var_dict["cat_vars"], list), "'cat_vars' in var_dict must be a list of strings"
             return var_dict, True
         except:
+            var_dict = self.create_var_dict(cat_limit=cat_limit)
             return var_dict, False
 
     def create_var_dict(self, cat_limit:int=None):
@@ -232,9 +233,11 @@ class ExploreData:
                     print(col.value_counts(dropna = False)[:display_limit])
                 except:
                     print(col.value_counts(dropna = False))
-            else:
+            elif c in self.var_dict["num_vars"]:
                 print(col.describe(percentiles = [0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99], datetime_is_numeric=True))
                 _ = self.find_outliers_IQR(col)
+            else:
+                print("Column not in cat_vars or num_vars")
             print('Unique values:', len(col.unique()))
             print('Null count:', sum(col.isna()))
             print()
@@ -278,7 +281,7 @@ class ExploreData:
                     txt_y = p.get_height()
                     g.ax.text(txt_x,txt_y,txt)
                 
-            else:
+            elif target in self.var_dict['num_vars']:
                 ## Numeric -- show mean target value by whether value is missing
                 # Faster to do aggregations before calling sns.barplot, but we get no error bar
                 staging = df[[var_missing_name, target]].groupby(var_missing_name)[target].agg(['mean', 'std'])
