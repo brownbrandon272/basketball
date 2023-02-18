@@ -1,1 +1,0 @@
-https://www.kaggle.com/datasets/nathanlauga/nba-games?select=games_details.csv
