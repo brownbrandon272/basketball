@@ -138,15 +138,19 @@ class ExploreData:
 
     def var_dict_checks(self, var_dict:dict=None, cat_limit:int=None) -> t.Tuple[dict, bool]:
         if var_dict is None: var_dict = self.create_var_dict(cat_limit=cat_limit)
+        self.feature_cols = var_dict['num_vars'] + var_dict['cat_vars']
         
         try:
             assert "num_vars" in var_dict.keys(), "var_dict must contain 'num_vars'"
             assert isinstance(var_dict["num_vars"], list), "'num_vars' in var_dict must be a list of strings"
             assert "cat_vars" in var_dict.keys(), "var_dict must contain 'cat_vars'"
             assert isinstance(var_dict["cat_vars"], list), "'cat_vars' in var_dict must be a list of strings"
+            for c in var_dict["num_vars"]: assert c in self.data.columns, f"{c} not in data"
+            for c in var_dict["cat_vars"]: assert c in self.data.columns, f"{c} not in data"
             return var_dict, True
         except:
             var_dict = self.create_var_dict(cat_limit=cat_limit)
+            self.feature_cols = var_dict['num_vars'] + var_dict['cat_vars']
             return var_dict, False
 
     def create_var_dict(self, cat_limit:int=None):
@@ -296,11 +300,13 @@ class ExploreData:
             return
 
         if target is None: target = self.target
+
+        feature_df = self.data[self.feature_cols].copy()
         
-        vars_w_na = self.data.isna().sum()[self.data.isna().sum() > 0].index
+        vars_w_na = feature_df.isna().sum()[feature_df.isna().sum() > 0].index
         print(f'{len(vars_w_na)} variables with missing values: {list(vars_w_na)}')
 
-        self.data[vars_w_na].isna().mean().sort_values(ascending=False).plot.bar(figsize=(10, 4))
+        feature_df[vars_w_na].isna().mean().sort_values(ascending=False).plot.bar(figsize=(10, 4))
         plt.ylabel('Percentage of missing data')
         plt.axhline(y=0.90, color='r', linestyle='-')
         plt.axhline(y=0.80, color='g', linestyle='-')
@@ -316,8 +322,11 @@ class ExploreData:
         if is_none_or_negative(cat_limit): cat_limit = self.cat_limit
         
         try:
-            var_dict, is_valid_var_dict = self.var_dict_checks(var_dict=var_dict)
-            if not is_valid_var_dict: return
+            if var_dict is None:
+                var_dict = self.var_dict
+            else:
+                var_dict, is_valid_var_dict = self.var_dict_checks(var_dict=var_dict)
+                if not is_valid_var_dict: return
 
             ## Start with comparing missing values to target variable
             self.missing_values(target=target)
