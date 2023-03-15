@@ -34,8 +34,10 @@ def is_none_or_negative(value) -> bool:
         return True
     return False
 
-def encode_rare_labels(cat_vars: t.List[str], data:pd.DataFrame, tol:float=0.02) -> pd.DataFrame:
+def encode_rare_labels(cat_vars: t.List[str], data:pd.DataFrame, tol:float=0.02, target:str=None) -> pd.DataFrame:
     df = data.copy()
+    # drop target if target is not none
+    if target is not None: df = df.drop(columns=[target])
 
     for var in cat_vars:
         assert var in df.columns, f"Column {var} does not exist in dataframe"
@@ -69,6 +71,8 @@ def encode_rare_labels(cat_vars: t.List[str], data:pd.DataFrame, tol:float=0.02)
     # print(rare_encoder.encoder_dict_)
 
     df = rare_encoder.transform(df) # returns dataframe, now with the inputted labels encode
+
+    if target is not None: df[target] = data[target]
 
     return df
 
@@ -264,6 +268,30 @@ class ExploreData:
             print("min outlier value: "+ str(outliers.min()))
         return outliers
 
+    def target_variable(self, target:str, var_dict:dict=None, cat_limit:int=None):
+        assert target in self.data.columns, f"target variable {target} not in data"
+        if is_none_or_negative(cat_limit): cat_limit = self.cat_limit
+        
+        try:
+            if var_dict is None:
+                var_dict = self.var_dict
+            else:
+                var_dict, is_valid_var_dict = self.var_dict_checks(var_dict=var_dict)
+                if not is_valid_var_dict: return
+
+            ## Start with comparing missing values to target variable
+            self.missing_values(target=target)
+            
+            col = pd.Series(self.data[target])
+            print(target, '--', col.dtype)
+
+            self.univariate_charts(target=target, var_dict=var_dict, cat_limit=cat_limit)
+            self.multivariate_charts(target=target, var_dict=var_dict)
+        except Exception as e:
+            traceback.print_exc()
+            
+        return
+
     def missing_values(self, target:str=None):
         def plot_na(var, target):
             df = self.data.copy()
@@ -314,31 +342,8 @@ class ExploreData:
 
         if target is None: return
         for var in vars_w_na:
+            if var==target: continue
             plot_na(var=var, target=target)
-        return
-
-    def target_variable(self, target:str, var_dict:dict=None, cat_limit:int=None):
-        assert target in self.data.columns, f"target variable {target} not in data"
-        if is_none_or_negative(cat_limit): cat_limit = self.cat_limit
-        
-        try:
-            if var_dict is None:
-                var_dict = self.var_dict
-            else:
-                var_dict, is_valid_var_dict = self.var_dict_checks(var_dict=var_dict)
-                if not is_valid_var_dict: return
-
-            ## Start with comparing missing values to target variable
-            self.missing_values(target=target)
-            
-            col = pd.Series(self.data[target])
-            print(target, '--', col.dtype)
-
-            self.univariate_charts(target=target, var_dict=var_dict, cat_limit=cat_limit)
-            self.multivariate_charts(target=target, var_dict=var_dict)
-        except Exception as e:
-            traceback.print_exc()
-            
         return
 
     def univariate_charts(self, var_dict:dict=None, cat_limit:int=None, tol:float=None, target:str=None):
@@ -422,7 +427,7 @@ class ExploreData:
         if not is_valid_var_dict: return
 
         if var_dict["cat_vars"]:
-            df = encode_rare_labels(cat_vars=var_dict["cat_vars"], data=self.data, tol=tol)
+            df = encode_rare_labels(cat_vars=var_dict["cat_vars"], data=self.data, tol=tol, target=target)
         else:
             df = self.data.copy()
 
