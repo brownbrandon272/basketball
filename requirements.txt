@@ -1,6 +1,7 @@
 feature_engine==1.5.2
 lightgbm-=3.3.5
 matplotlib==3.5.2
+nba-api==1.2.1
 numpy==1.24.2
 pandas==1.4.4
 scikit_learn==1.2.2
