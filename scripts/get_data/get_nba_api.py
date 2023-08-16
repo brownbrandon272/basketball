@@ -1,5 +1,12 @@
 from nba_api.stats.static import players as players, teams
-from nba_api.stats.endpoints import leaguegamelog, scoreboardv2, boxscoretraditionalv2
+from nba_api.stats.endpoints import (
+    leaguegamelog,
+    scoreboardv2,
+    boxscoretraditionalv2,
+    boxscoreadvancedv2,
+    drafthistory,
+    leaguestandingsv3,
+)
 from requests.exceptions import ConnectionError, ReadTimeout
 from urllib3.exceptions import ProtocolError
 from datetime import datetime
@@ -8,6 +15,7 @@ import typing as t
 import pandas as pd
 import time
 
+## static NBA APIs
 # Find player ID
 player_df = pd.DataFrame(players.get_players())
 print(player_df.sample(5))
@@ -44,11 +52,25 @@ def retry_api_call(api_call, max_retries=MAX_RETRIES):
     raise ConnectionError(f"API call failed after {max_retries} retries.")
 
 
-## Get seasons of game log data
-def get_game_log_data(year, season_type_all_star):
+## NBA APIs - No parameters needed
+def get_draft_history(season_year=None):
+    if season_year is None:
+        return drafthistory.DraftHistory().draft_history.get_data_frame()
+    return drafthistory.DraftHistory(season_year_nullable=season_year).draft_history.get_data_frame()
+
+
+## APIs by season
+# Get seasons of game log data
+def get_leaguegamelog_data(year, season_type_all_star):
     lg = leaguegamelog.LeagueGameLog(season=str(year), season_type_all_star=season_type_all_star)
-    data_frame = lg.get_data_frames()[0]
+    data_frame = lg.league_game_log.get_data_frame()
     data_frame["SeasonTypeAllStar"] = season_type_all_star
+    return data_frame
+
+
+def get_leaguestandings_data(year):
+    ls = leaguestandingsv3.LeagueStandingsV3(season=str(year))
+    data_frame = ls.standings.get_data_frame()
     return data_frame
 
 
@@ -62,13 +84,56 @@ def fetch_game_data():
         print(f"Getting data for {year}")
         for season_type in season_types:
             game_log_data = pd.concat(
-                [game_log_data, get_game_log_data(year, season_type)], ignore_index=True
+                [game_log_data, get_leaguegamelog_data(year, season_type)], ignore_index=True
             )
 
     # Export 'game_log_data' to a single CSV file
     game_log_data.to_csv(data_path + "game_log_data.csv", index=False)
     print("Game Log Data exported to game_log_data.csv")
     return
+
+
+## APIs - game_date
+def fetch_scoreboard_data(game_date) -> t.Tuple[pd.DataFrame, list]:
+    def api_call():
+        return scoreboardv2.ScoreboardV2(game_date=game_date).game_header.get_data_frame()
+
+    data = retry_api_call(api_call)
+    game_ids = data["GAME_ID"].unique().tolist()
+    return data, game_ids
+
+
+## APIs - game_id
+def fetch_boxscoretraditional_data(game_ids):
+    player_stats_data = pd.DataFrame()
+
+    def api_call(game_id):
+        return boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=game_id).player_stats.get_data_frame()
+
+    for i, game_id in enumerate(game_ids):
+        data = retry_api_call(lambda: api_call(game_id))
+        if i == 0:
+            player_stats_data = data
+        else:
+            player_stats_data = pd.concat([player_stats_data, data], ignore_index=True)
+
+    return player_stats_data
+
+
+def fetch_boxscoreadvanced_data(game_ids):
+    player_stats_data = pd.DataFrame()
+
+    def api_call(game_id):
+        return boxscoreadvancedv2.BoxScoreAdvancedV2(game_id=game_id).player_stats.get_data_frame()
+
+    for i, game_id in enumerate(game_ids):
+        data = retry_api_call(lambda: api_call(game_id))
+        if i == 0:
+            player_stats_data = data
+        else:
+            player_stats_data = pd.concat([player_stats_data, data], ignore_index=True)
+
+    return player_stats_data
 
 
 def fetch_data():
@@ -86,9 +151,9 @@ def fetch_data():
         scoreboard_data, game_ids = fetch_scoreboard_data(game_date)
 
         # Fetch and save player stats data for the current game date
-        box_score_traditional_data = fetch_player_stats_data(game_ids, game_date)
+        box_score_traditional_data = fetch_boxscoretraditional_data(game_ids)
 
-        save_data(scoreboard_data, box_score_traditional_data, game_date)
+        save_data(scoreboard_data, box_score_traditional_data)
         printer(i=i, verbage=f"Scoreboard and Box Score Data saved for {game_date}, game_ids: {game_ids}")
     return
 
@@ -111,32 +176,7 @@ def filter_game_dates(distinct_game_dates: list):
         return distinct_game_dates
 
 
-def fetch_scoreboard_data(game_date) -> t.Tuple[pd.DataFrame, list]:
-    def api_call():
-        return scoreboardv2.ScoreboardV2(game_date=game_date).game_header.get_data_frame()
-
-    data = retry_api_call(api_call)
-    game_ids = data["GAME_ID"].unique().tolist()
-    return data, game_ids
-
-
-def fetch_player_stats_data(game_ids):
-    player_stats_data = pd.DataFrame()
-
-    def api_call(game_id):
-        return boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=game_id).player_stats.get_data_frame()
-
-    for i, game_id in enumerate(game_ids):
-        data = retry_api_call(lambda: api_call(game_id))
-        if i == 0:
-            player_stats_data = data
-        else:
-            player_stats_data = pd.concat([player_stats_data, data], ignore_index=True)
-
-    return player_stats_data
-
-
-def save_data(scoreboard_data, box_score_traditional_data, game_date):
+def save_data(scoreboard_data, box_score_traditional_data):
     # Read the existing scoreboard CSV if it exists
     try:
         existing_scoreboard_data = pd.read_csv(data_path + f"scoreboard_data.csv")
