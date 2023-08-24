@@ -1,5 +1,4 @@
 {
-    "black-formatter.args": ["--line-length", "110"],
     "[python]": {
         "editor.defaultFormatter": "ms-python.black-formatter",
         "editor.formatOnSave": true
