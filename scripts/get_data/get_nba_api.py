@@ -1,4 +1,8 @@
-from nba_api.stats.static import players as players, teams
+"""
+get nba api data
+"""
+
+from nba_api.stats.static import players, teams
 from nba_api.stats.endpoints import (
     leaguegamelog,
     scoreboardv2,
@@ -7,13 +11,12 @@ from nba_api.stats.endpoints import (
     drafthistory,
     leaguestandingsv3,
 )
-from requests.exceptions import ConnectionError, ReadTimeout
-from urllib3.exceptions import ProtocolError
 from datetime import datetime
 import numpy as np
 import typing as t
 import pandas as pd
-import time
+
+from scripts.get_data.call_api import retry_api_call
 
 ## static NBA APIs
 # Find player ID
@@ -34,22 +37,6 @@ FIRST_SEASON = 1946  # team_df['year_founded'].min()
 LAST_SEASON = 2022
 
 data_path = "../data/"
-
-MAX_RETRIES = 3
-WAIT_TIME = 5
-
-
-def retry_api_call(api_call, max_retries=MAX_RETRIES):
-    retries = 0
-    while retries < max_retries:
-        try:
-            return api_call()
-        except (ConnectionError, ProtocolError, ReadTimeout) as e:
-            print(f"Error occurred: {e}")
-            retries += 1
-            print(f"Retrying... (Attempt {retries}/{max_retries})")
-            time.sleep(WAIT_TIME)
-    raise ConnectionError(f"API call failed after {max_retries} retries.")
 
 
 ## NBA APIs - No parameters needed
