@@ -60,15 +60,6 @@ league_game_log_dict = {
     "csv": "game_log_data.csv",
 }
 
-scoreboard_dict = {
-    "name": "scoreboard",
-    "endpoint": lambda kwargs: scoreboardv2.ScoreboardV2(**kwargs).game_header,
-    "main_loop_parameter": "season",
-    "parent": seasons_dict,
-    "parent_col": None,
-    "csv": "scoreboard_data.csv",
-}
-
 league_standings_dict = {
     "name": "league_standings",
     "endpoint": lambda kwargs: leaguestandingsv3.LeagueStandingsV3(**kwargs).standings,
@@ -76,6 +67,15 @@ league_standings_dict = {
     "parent": seasons_dict,
     "parent_col": None,
     "csv": "league_standings_data.csv",
+}
+
+scoreboard_dict = {
+    "name": "scoreboard",
+    "endpoint": lambda kwargs: scoreboardv2.ScoreboardV2(**kwargs).game_header,
+    "main_loop_parameter": "season",
+    "parent": seasons_dict,
+    "parent_col": None,
+    "csv": "scoreboard_data.csv",
 }
 
 box_score_traditional_dict = {
@@ -99,3 +99,9 @@ box_score_advanced_dict = {
     "parent_col": "GAME_ID",
     "csv": "box_score_advanced_data.csv",
 }
+
+endpoint_dicts = [
+    seasons_dict,
+    players_dict,
+    teams_dict,
+]
