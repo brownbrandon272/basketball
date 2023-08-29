@@ -37,13 +37,17 @@ TEAMS_DICT = {
 
 DRAFT_HISTORY_DICT = {
     "name": "draft_history",
-    "endpoint": lambda kwargs: drafthistory.DraftHistory(**kwargs).draft_history,
+    "endpoint": lambda kwargs: drafthistory.DraftHistory(
+        **kwargs
+    ).draft_history.get_data_frame(),
     "csv": "draft_history_data.csv",
 }
 
 LEAGUE_GAME_LOG_DICT = {
     "name": "league_game_log",
-    "endpoint": lambda kwargs: leaguegamelog.LeagueGameLog(**kwargs).league_game_log,
+    "endpoint": lambda kwargs: leaguegamelog.LeagueGameLog(
+        **kwargs
+    ).league_game_log.get_data_frame(),
     "main_loop_parameter": "season",
     "parent": SEASONS_DICT,
     "main_col_dtype": "int",
@@ -55,7 +59,9 @@ LEAGUE_GAME_LOG_DICT = {
 
 LEAGUE_STANDINGS_DICT = {
     "name": "league_standings",
-    "endpoint": lambda kwargs: leaguestandingsv3.LeagueStandingsV3(**kwargs).standings,
+    "endpoint": lambda kwargs: leaguestandingsv3.LeagueStandingsV3(
+        **kwargs
+    ).standings.get_data_frame(),
     "main_loop_parameter": "season",
     "parent": SEASONS_DICT,
     "main_col_dtype": "int",
@@ -64,7 +70,9 @@ LEAGUE_STANDINGS_DICT = {
 
 SCOREBOARD_DICT = {
     "name": "scoreboard",
-    "endpoint": lambda kwargs: scoreboardv2.ScoreboardV2(**kwargs).game_header,
+    "endpoint": lambda kwargs: scoreboardv2.ScoreboardV2(
+        **kwargs
+    ).game_header.get_data_frame(),
     "main_loop_parameter": "game_date",
     "parent": LEAGUE_GAME_LOG_DICT,
     "parent_col": "GAME_DATE_EST",
@@ -77,10 +85,11 @@ BOX_SCORE_TRADITIONAL_DICT = {
     "name": "box_score_traditional",
     "endpoint": lambda kwargs: boxscoretraditionalv2.BoxScoreTraditionalV2(
         **kwargs
-    ).player_stats,
+    ).player_stats.get_data_frame(),
     "main_loop_parameter": "game_id",
     "parent": SCOREBOARD_DICT,
     "parent_col": "GAME_ID",
+    "current_col": "GAME_ID",
     "main_col_dtype": "int",
     "csv": "box_score_traditional_data.csv",
 }
@@ -89,10 +98,11 @@ BOX_SCORE_ADVANCED_DICT = {
     "name": "box_score_advanced",
     "endpoint": lambda kwargs: boxscoreadvancedv2.BoxScoreAdvancedV2(
         **kwargs
-    ).player_stats,
+    ).player_stats.get_data_frame(),
     "main_loop_parameter": "game_id",
     "parent": SCOREBOARD_DICT,
     "parent_col": "GAME_ID",
+    "current_col": "GAME_ID",
     "main_col_dtype": "int",
     "csv": "box_score_advanced_data.csv",
 }

@@ -30,19 +30,22 @@ class QueryAPI:
         self.parent_dict = endpoint_dict.get("parent")
         self.parent_col = endpoint_dict.get("parent_col")
         self.current_csv_path = self.data_path + endpoint_dict.get("csv")
-        self.parent_csv_path = self.data_path + self.parent_dict.get("csv")
+        self.parent_csv_path = (
+            self.data_path + self.parent_dict.get("csv") if self.parent_dict else None
+        )
         self.main_col_dtype = endpoint_dict.get("main_col_dtype")
         self.additional_parameters = endpoint_dict.get("additional_parameters")
+        self.current_col = endpoint_dict.get("current_col")
 
         self.parent_csv_data = self._load_parent_csv()
         self.current_csv_data = self._load_current_csv()
-
-        ## TODO: get data type of parent col and convert to correct type, maybe better in max function?
         return
 
     def _load_current_csv(self) -> pd.DataFrame:
         try:
-            return pd.read_csv(self.current_csv_path)
+            data = pd.read_csv(self.current_csv_path)
+            data[self.current_col] = data[self.current_col].astype(self.main_col_dtype)
+            return data
         except FileNotFoundError:
             print(
                 f"No existing CSV file found for {self.name} endpoint. A new CSV file will be created."
@@ -54,7 +57,9 @@ class QueryAPI:
             return None
 
         try:
-            return pd.read_csv(self.parent_csv_path)
+            data = pd.read_csv(self.parent_csv_path)
+            data[self.parent_col] = data[self.parent_col].astype(self.main_col_dtype)
+            return data
         except FileNotFoundError as exc:
             raise FileNotFoundError(
                 f"Parent CSV file not found: {self.parent_csv_path}"
@@ -67,7 +72,7 @@ class QueryAPI:
     def fetch_data(self):
         ## TODO: add logic to check if data is already up to date
         if self.parent_dict is None:
-            data = self._call_endpoint()
+            data = self._call_endpoint(param_dict={})
             self._save_data(data)
             self._printer(f"Data saved for {self.name}")
             return
@@ -82,8 +87,9 @@ class QueryAPI:
                 param_dict = {self.main_loop_parameter: loop_value}
                 data = self._call_endpoint(param_dict=param_dict)
             else:
-                data = pd.DataFrame()
                 for param_dict in self._get_distinct_loop_combos(loop_value):
+                    if i == 0:
+                        data = self._call_endpoint(param_dict)
                     data = pd.concat(
                         [data, self._call_endpoint(param_dict)], ignore_index=True
                     )
@@ -102,10 +108,9 @@ class QueryAPI:
 
     def _call_endpoint(self, param_dict: t.Dict[str, t.Any] = None) -> pd.DataFrame:
         # Call the endpoint with the current loop_value
-        ## TODO: incorporate retry_api_call
-        if param_dict is None:
-            return self.endpoint()
-        return self.endpoint(**param_dict)
+        api_call = self.endpoint(**param_dict)
+        data_frame = retry_api_call(api_call)
+        return data_frame
 
     def _save_data(self, data):
         # Append 'scoreboard_data' to the existing CSV and export to a new CSV file
@@ -122,7 +127,6 @@ class QueryAPI:
             )
         if self.parent_dict.get("name") == "seasons":
             return range(self.start_season, SEASONS_DICT["current_season_year"] + 1)
-
         return self._get_loop_values()
 
     def _get_loop_values(self) -> t.List[t.Any]:
