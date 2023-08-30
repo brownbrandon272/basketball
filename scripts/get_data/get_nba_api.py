@@ -95,7 +95,7 @@ class NBAAPI:
     def fetch_data(self):
         ## TODO: add logic to check if data is already up to date
         if self.parent_dict is None:
-            data = self._call_endpoint(param_dict={})
+            data = self._call_endpoint()
             self._save_data(data)
             self._printer(f"Data saved for {self.name}")
             return
@@ -131,7 +131,11 @@ class NBAAPI:
 
     def _call_endpoint(self, param_dict: t.Dict[str, t.Any] = None) -> pd.DataFrame:
         # Call the endpoint with the current loop_value
-        api_call = self.endpoint(**param_dict)
+        def api_call():
+            if param_dict is None:
+                return self.endpoint()
+            return self.endpoint(**param_dict)
+
         data_frame = retry_api_call(api_call)
         return data_frame
 

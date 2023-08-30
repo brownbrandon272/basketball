@@ -25,13 +25,13 @@ SEASONS_DICT = {
 
 PLAYERS_DICT = {
     "name": "players",
-    "endpoint": lambda kwargs: players.get_players(),
+    "endpoint": lambda: players.get_players(),
     "csv": "players_data.csv",
 }
 
 TEAMS_DICT = {
     "name": "teams",
-    "endpoint": lambda kwargs: teams.get_teams(),
+    "endpoint": lambda: teams.get_teams(),
     "csv": "teams_data.csv",
 }
 
