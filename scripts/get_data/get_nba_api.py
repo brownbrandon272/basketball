@@ -8,21 +8,44 @@ from itertools import product
 import pandas as pd
 
 from scripts.get_data.call_api import retry_api_call
-from scripts.get_data.nba_api_endpoints import SEASONS_DICT
+from scripts.get_data.nba_api_endpoints import SEASONS_DICT, LIST_OF_ENDPOINT_DICTS
 
 
-TEST = True
 TEST_LOOPS = 2
 
 
-class QueryAPI:
-    def __init__(self, endpoint_dict, all_dates: bool = False):
+def retrieve_data(
+    all_dates: bool = False, test: bool = False, specific_endpoints: t.List[str] = None
+):
+    ## Raise error if any of the endpoints are not in LIST_OF_ENDPOINT_DICTS
+    endpoint_names = [
+        endpoint_dict.get("name") for endpoint_dict in LIST_OF_ENDPOINT_DICTS
+    ]
+    for endpoint in specific_endpoints:
+        if endpoint not in endpoint_names:
+            raise ValueError(
+                f"{endpoint} is not a valid endpoint\nAvailable endpoints: {endpoint_names}"
+            )
+
+    # if specific_endpoints was passed as None or had all its values removed
+    if not specific_endpoints:
+        specific_endpoints = LIST_OF_ENDPOINT_DICTS
+
+    for endpoint_dict in specific_endpoints:
+        query_api = NBAAPI(endpoint_dict, all_dates, test)
+        query_api.fetch_data()
+    return
+
+
+class NBAAPI:
+    def __init__(self, endpoint_dict, all_dates: bool = False, test: bool = False):
         self.data_path = "../data_temp/"
         self.start_season = (
             SEASONS_DICT.get("first_season")
             if all_dates
             else SEASONS_DICT.get("current_season_year")
         )
+        self.test = test
 
         self.name = endpoint_dict.get("name")
         self.endpoint = endpoint_dict.get("endpoint")
@@ -31,7 +54,7 @@ class QueryAPI:
         self.parent_col = endpoint_dict.get("parent_col")
         self.current_csv_path = self.data_path + endpoint_dict.get("csv")
         self.parent_csv_path = (
-            self.data_path + self.parent_dict.get("csv") if self.parent_dict else None
+            (self.data_path + self.parent_dict.get("csv")) if self.parent_dict else None
         )
         self.main_col_dtype = endpoint_dict.get("main_col_dtype")
         self.additional_parameters = endpoint_dict.get("additional_parameters")
@@ -80,7 +103,7 @@ class QueryAPI:
         iterable = self._get_iterable()
 
         for i, loop_value in enumerate(iterable):
-            if TEST and (i >= TEST_LOOPS):
+            if self.test and (i >= TEST_LOOPS):
                 break
 
             if self.additional_parameters is None:
@@ -143,12 +166,19 @@ class QueryAPI:
                 f"Error occurred while getting unique values of {self.parent_col} from {self.parent_csv_path}\n{exc}"
             ) from exc
 
-    @staticmethod
-    def _printer(i: int = 0, verbage: str = ""):
-        if TEST or (i % 5 == 0):
+    def _printer(self, i: int = 0, verbage: str = ""):
+        if self.test or (i % 5 == 0):
             current_time = datetime.now().strftime("%H:%M:%S")
             print(f"[{i}][{current_time}] {verbage}")
         return
+
+
+if __name__ == "__main__":
+    retrieve_data(
+        all_dates=False,
+        test=True,
+        specific_endpoints=[],
+    )
 
 
 # ## static NBA APIs
