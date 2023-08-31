@@ -2,6 +2,7 @@
 This module contains a dictionary of dictionaries that contain the parameters
 """
 
+import pandas as pd
 from nba_api.stats.static import players, teams
 from nba_api.stats.endpoints import (
     drafthistory,
@@ -25,21 +26,19 @@ SEASONS_DICT = {
 
 PLAYERS_DICT = {
     "name": "players",
-    "endpoint": lambda: players.get_players(),
+    "endpoint": lambda: pd.DataFrame(players.get_players()),
     "csv": "players_data.csv",
 }
 
 TEAMS_DICT = {
     "name": "teams",
-    "endpoint": lambda: teams.get_teams(),
+    "endpoint": lambda: pd.DataFrame(teams.get_teams()),
     "csv": "teams_data.csv",
 }
 
 DRAFT_HISTORY_DICT = {
     "name": "draft_history",
-    "endpoint": lambda kwargs: drafthistory.DraftHistory(
-        **kwargs
-    ).draft_history.get_data_frame(),
+    "endpoint": lambda: drafthistory.DraftHistory().draft_history.get_data_frame(),
     "csv": "draft_history_data.csv",
 }
 

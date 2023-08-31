@@ -17,22 +17,22 @@ TEST_LOOPS = 2
 def retrieve_data(
     all_dates: bool = False, test: bool = False, specific_endpoints: t.List[str] = None
 ):
-    ## Raise error if any of the endpoints are not in LIST_OF_ENDPOINT_DICTS
-    endpoint_names = [
-        endpoint_dict.get("name") for endpoint_dict in LIST_OF_ENDPOINT_DICTS
-    ]
-    for endpoint in specific_endpoints:
-        if endpoint not in endpoint_names:
-            raise ValueError(
-                f"{endpoint} is not a valid endpoint\nAvailable endpoints: {endpoint_names}"
-            )
-
     # if specific_endpoints was passed as None or had all its values removed
     if not specific_endpoints:
         specific_endpoints = LIST_OF_ENDPOINT_DICTS
+    else:
+        ## Raise error if any of the endpoints are not in LIST_OF_ENDPOINT_DICTS
+        endpoint_names = [
+            endpoint_dict.get("name") for endpoint_dict in LIST_OF_ENDPOINT_DICTS
+        ]
+        for endpoint in specific_endpoints:
+            if endpoint not in endpoint_names:
+                raise ValueError(
+                    f"{endpoint} is not a valid endpoint\nAvailable endpoints: {endpoint_names}"
+                )
 
     for endpoint_dict in specific_endpoints:
-        query_api = NBAAPI(endpoint_dict, all_dates, test)
+        query_api = NBAAPI(endpoint_dict=endpoint_dict, all_dates=all_dates, test=test)
         query_api.fetch_data()
     return
 
@@ -50,30 +50,45 @@ class NBAAPI:
         self.name = endpoint_dict.get("name")
         self.endpoint = endpoint_dict.get("endpoint")
         self.main_loop_parameter = endpoint_dict.get("main_loop_parameter")
-        self.parent_dict = endpoint_dict.get("parent")
-        self.parent_col = endpoint_dict.get("parent_col")
         self.current_csv_path = self.data_path + endpoint_dict.get("csv")
-        self.parent_csv_path = (
-            (self.data_path + self.parent_dict.get("csv")) if self.parent_dict else None
-        )
         self.main_col_dtype = endpoint_dict.get("main_col_dtype")
         self.additional_parameters = endpoint_dict.get("additional_parameters")
         self.current_col = endpoint_dict.get("current_col")
 
-        self.parent_csv_data = self._load_parent_csv()
         self.current_csv_data = self._load_current_csv()
+
+        self.parent_col = endpoint_dict.get("parent_col")
+        self.parent_dict = endpoint_dict.get("parent")
+        if self.parent_dict and self.parent_dict.get("csv"):
+            self.parent_csv_path = (
+                (self.data_path + self.parent_dict.get("csv"))
+                if (self.parent_dict and self.parent_dict.get("csv"))
+                else None
+            )
+            self.parent_csv_data = self._load_parent_csv()
+        else:
+            self.parent_csv_path = None
+            self.parent_csv_data = None
+
         return
 
-    def _load_current_csv(self) -> pd.DataFrame:
+    def _load_current_csv(self) -> t.Union[pd.DataFrame, None]:
         try:
             data = pd.read_csv(self.current_csv_path)
-            data[self.current_col] = data[self.current_col].astype(self.main_col_dtype)
+            if self.main_col_dtype:
+                data[self.current_col] = data[self.current_col].astype(
+                    self.main_col_dtype
+                )
             return data
         except FileNotFoundError:
             print(
                 f"No existing CSV file found for {self.name} endpoint. A new CSV file will be created."
             )
             return None
+        except Exception as exc:
+            raise Exception(
+                f"Error occurred while reading current CSV file: {self.current_csv_path}\n{exc}"
+            ) from exc
 
     def _load_parent_csv(self) -> pd.DataFrame:
         if self.parent_dict is None:
@@ -140,6 +155,9 @@ class NBAAPI:
         return data_frame
 
     def _save_data(self, data):
+        if self.current_csv_data is None:
+            data.to_csv(self.current_csv_path, index=False)
+            return
         # Append 'scoreboard_data' to the existing CSV and export to a new CSV file
         self.current_csv_data = pd.concat(
             [self.current_csv_data, data], ignore_index=True
