@@ -1,3 +1,5 @@
+__pycache__/
 data_timeseries.csv
 data/
+data_temp/
 backup/
