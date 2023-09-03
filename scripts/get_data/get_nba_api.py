@@ -68,7 +68,7 @@ class NBAAPI:
         data_path : str, optional
             Path to where the data is stored, by default None
         """
-        self.data_path = "../data/" if data_path is None else data_path
+        self.data_path = "./data/" if data_path is None else data_path
         self.start_season = (
             SEASONS_DICT.get("first_season")
             if all_dates
@@ -84,6 +84,7 @@ class NBAAPI:
         self.additional_parameters = endpoint_dict.get("additional_parameters")
         self.current_col = endpoint_dict.get("current_col")
         self.main_col_transform = endpoint_dict.get("main_col_transform")
+        self.save_transform = endpoint_dict.get("save_transform")
 
         self.current_csv_data = self._load_current_csv()
 
@@ -213,6 +214,9 @@ class NBAAPI:
         return data_frame
 
     def _save_data(self, data: pd.DataFrame):
+        if self.save_transform:
+            for col, transform in self.save_transform.items():
+                data[col] = data[col].apply(transform)
         if self.current_csv_data.empty:
             data.to_csv(self.current_csv_path, index=False)
             self.current_csv_data = self._load_current_csv()

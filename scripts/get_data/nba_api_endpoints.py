@@ -79,6 +79,10 @@ SCOREBOARD_DICT = {
     "parent_col": "GAME_DATE",
     "current_col": "GAME_DATE_EST",
     "main_col_dtype": "datetime64[ns]",
+    "main_col_transform": lambda x: x.strftime("%Y-%m-%d"),
+    "save_transform": {
+        "GAME_DATE_EST": lambda x: pd.to_datetime(x).strftime("%Y-%m-%d %H:%M:%S")
+    },
     "csv": "scoreboard_data.csv",
 }
 
