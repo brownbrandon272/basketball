@@ -6,6 +6,7 @@ import typing as t
 from datetime import datetime
 from itertools import product
 import pandas as pd
+import numpy as np
 
 from scripts.get_data.call_api import retry_api_call
 from scripts.get_data.nba_api_endpoints import SEASONS_DICT, LIST_OF_ENDPOINT_DICTS
@@ -15,23 +16,30 @@ TEST_LOOPS = 2
 
 
 def retrieve_data(
-    all_dates: bool = False, test: bool = False, specific_endpoints: t.List[str] = None
+    all_dates: bool = False,
+    test: bool = False,
+    specific_endpoint_names: t.List[str] = None,
 ):
-    # if specific_endpoints was passed as None or had all its values removed
-    if not specific_endpoints:
-        specific_endpoints = LIST_OF_ENDPOINT_DICTS
+    # if specific_endpoint_names is None then retrieve all endpoints
+    if not specific_endpoint_names:
+        _list_of_endpoint_dicts = LIST_OF_ENDPOINT_DICTS
     else:
+        ## Check if passed endpoints are valid, and if so add their dictionaries to _list_of_endpoint_dicts
+        _list_of_endpoint_dicts = []
         ## Raise error if any of the endpoints are not in LIST_OF_ENDPOINT_DICTS
-        endpoint_names = [
-            endpoint_dict.get("name") for endpoint_dict in LIST_OF_ENDPOINT_DICTS
-        ]
-        for endpoint in specific_endpoints:
-            if endpoint not in endpoint_names:
-                raise ValueError(
-                    f"{endpoint} is not a valid endpoint\nAvailable endpoints: {endpoint_names}"
-                )
+        dict_of_endpoints = {
+            endpoint_dict.get("name"): endpoint_dict
+            for endpoint_dict in LIST_OF_ENDPOINT_DICTS
+        }
 
-    for endpoint_dict in specific_endpoints:
+        for endpoint_name in specific_endpoint_names:
+            if endpoint_name not in dict_of_endpoints.keys():
+                raise ValueError(
+                    f"{endpoint_name} is not a valid endpoint\nAvailable endpoints: {dict_of_endpoints.keys()}"
+                )
+            _list_of_endpoint_dicts.append(dict_of_endpoints.get(endpoint_name))
+
+    for endpoint_dict in _list_of_endpoint_dicts:
         query_api = NBAAPI(endpoint_dict=endpoint_dict, all_dates=all_dates, test=test)
         query_api.fetch_data()
     return
@@ -54,6 +62,7 @@ class NBAAPI:
         self.main_col_dtype = endpoint_dict.get("main_col_dtype")
         self.additional_parameters = endpoint_dict.get("additional_parameters")
         self.current_col = endpoint_dict.get("current_col")
+        self.main_col_transform = endpoint_dict.get("main_col_transform")
 
         self.current_csv_data = self._load_current_csv()
 
@@ -68,11 +77,11 @@ class NBAAPI:
             self.parent_csv_data = self._load_parent_csv()
         else:
             self.parent_csv_path = None
-            self.parent_csv_data = None
+            self.parent_csv_data = pd.DataFrame()
 
         return
 
-    def _load_current_csv(self) -> t.Union[pd.DataFrame, None]:
+    def _load_current_csv(self) -> pd.DataFrame:
         try:
             data = pd.read_csv(self.current_csv_path)
             if self.main_col_dtype:
@@ -84,7 +93,7 @@ class NBAAPI:
             print(
                 f"No existing CSV file found for {self.name} endpoint. A new CSV file will be created."
             )
-            return None
+            return pd.DataFrame()
         except Exception as exc:
             raise Exception(
                 f"Error occurred while reading current CSV file: {self.current_csv_path}\n{exc}"
@@ -92,7 +101,7 @@ class NBAAPI:
 
     def _load_parent_csv(self) -> pd.DataFrame:
         if self.parent_dict is None:
-            return None
+            return pd.DataFrame()
 
         try:
             data = pd.read_csv(self.parent_csv_path)
@@ -112,7 +121,7 @@ class NBAAPI:
         if self.parent_dict is None:
             data = self._call_endpoint()
             self._save_data(data)
-            self._printer(f"Data saved for {self.name}")
+            self._printer(verbage=f"Data saved for {self.name}")
             return
 
         iterable = self._get_iterable()
@@ -125,15 +134,20 @@ class NBAAPI:
                 param_dict = {self.main_loop_parameter: loop_value}
                 data = self._call_endpoint(param_dict=param_dict)
             else:
-                for param_dict in self._get_distinct_loop_combos(loop_value):
-                    if i == 0:
+                for j, param_dict in enumerate(
+                    self._get_distinct_loop_combos(loop_value)
+                ):
+                    if j == 0:
                         data = self._call_endpoint(param_dict)
-                    data = pd.concat(
-                        [data, self._call_endpoint(param_dict)], ignore_index=True
-                    )
-
+                    else:
+                        data = pd.concat(
+                            [data, self._call_endpoint(param_dict)], ignore_index=True
+                        )
+            if data.empty:
+                self._printer(i=i, verbage=f"No data for {self.name}, {param_dict}")
+                continue
             self._save_data(data)
-            self._printer(i, f"Data saved for {self.name}, {param_dict}")
+            self._printer(i=i, verbage=f"Data saved for {self.name}, {param_dict}")
         return
 
     def _get_distinct_loop_combos(self, main_loop_value) -> t.List[t.Dict[str, t.Any]]:
@@ -149,14 +163,16 @@ class NBAAPI:
         def api_call():
             if param_dict is None:
                 return self.endpoint()
-            return self.endpoint(**param_dict)
+            return self.endpoint(param_dict)
 
         data_frame = retry_api_call(api_call)
+        data_frame = self._add_params(data_frame, param_dict)
         return data_frame
 
-    def _save_data(self, data):
-        if self.current_csv_data is None:
+    def _save_data(self, data: pd.DataFrame):
+        if self.current_csv_data.empty:
             data.to_csv(self.current_csv_path, index=False)
+            self.current_csv_data = self._load_current_csv()
             return
         # Append 'scoreboard_data' to the existing CSV and export to a new CSV file
         self.current_csv_data = pd.concat(
@@ -170,23 +186,42 @@ class NBAAPI:
             raise Exception(
                 f"Parent dictionary not found for {self.name} endpoint. Unable to get iterable."
             )
-        if self.parent_dict.get("name") == "seasons":
-            return range(self.start_season, SEASONS_DICT["current_season_year"] + 1)
-        return self._get_loop_values()
-
-    def _get_loop_values(self) -> t.List[t.Any]:
-        try:
-            unique_loop_values = self.parent_csv_data[self.parent_col].unique().tolist()
-            max_saved_loop_value = self.current_csv_data[self.main_loop_parameter].max()
-            if max_saved_loop_value is None:
-                print(f"Getting all unique values of {self.parent_col}")
-                return unique_loop_values
+        loop_values = self._get_loop_values()
+        if self.current_csv_data.empty:
+            print(f"Getting all unique values of {self.parent_col}")
+        else:
+            max_saved_loop_value = self.current_csv_data[self.current_col].max()
             print(f"Filtering game dates to those greater than {max_saved_loop_value}")
-            return unique_loop_values[unique_loop_values > max_saved_loop_value]
+            loop_values = loop_values[loop_values > max_saved_loop_value]
+
+        if self.main_col_transform:
+            loop_values = pd.Series(loop_values).apply(self.main_col_transform)
+        return np.sort(loop_values)
+
+    def _get_loop_values(self):
+        try:
+            if self.parent_dict.get("name") == "seasons":
+                loop_values = np.array(
+                    range(self.start_season, SEASONS_DICT["current_season_year"] + 1)
+                )
+            else:
+                loop_values = np.array(self.parent_csv_data[self.parent_col].unique())
+            return loop_values
         except Exception as exc:
             raise Exception(
                 f"Error occurred while getting unique values of {self.parent_col} from {self.parent_csv_path}\n{exc}"
             ) from exc
+
+    @staticmethod
+    def _add_params(
+        data: pd.DataFrame, param_dict: t.Dict[str, t.Any] = None
+    ) -> pd.DataFrame:
+        if param_dict is None:
+            return data
+        for key, value in param_dict.items():
+            if key not in data.columns:
+                data[key] = value
+        return data
 
     def _printer(self, i: int = 0, verbage: str = ""):
         if self.test or (i % 5 == 0):

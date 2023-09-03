@@ -8,7 +8,7 @@ from nba_api.stats.endpoints import (
     drafthistory,
     leaguegamelog,
     scoreboardv2,
-    leaguestandingsv3,
+    leaguestandings,
     boxscoretraditionalv2,
     boxscoreadvancedv2,
 )
@@ -42,6 +42,18 @@ DRAFT_HISTORY_DICT = {
     "csv": "draft_history_data.csv",
 }
 
+LEAGUE_STANDINGS_DICT = {
+    "name": "league_standings",
+    "endpoint": lambda kwargs: leaguestandings.LeagueStandings(
+        **kwargs
+    ).standings.get_data_frame(),
+    "main_loop_parameter": "season",
+    "parent": SEASONS_DICT,
+    "current_col": "season",
+    "main_col_dtype": "int",
+    "csv": "league_standings_data.csv",
+}
+
 LEAGUE_GAME_LOG_DICT = {
     "name": "league_game_log",
     "endpoint": lambda kwargs: leaguegamelog.LeagueGameLog(
@@ -49,22 +61,12 @@ LEAGUE_GAME_LOG_DICT = {
     ).league_game_log.get_data_frame(),
     "main_loop_parameter": "season",
     "parent": SEASONS_DICT,
+    "current_col": "season",
     "main_col_dtype": "int",
     "additional_parameters": {
         "season_type_all_star": ["Regular Season", "Pre Season", "Playoffs", "All-Star"]
     },
     "csv": "game_log_data.csv",
-}
-
-LEAGUE_STANDINGS_DICT = {
-    "name": "league_standings",
-    "endpoint": lambda kwargs: leaguestandingsv3.LeagueStandingsV3(
-        **kwargs
-    ).standings.get_data_frame(),
-    "main_loop_parameter": "season",
-    "parent": SEASONS_DICT,
-    "main_col_dtype": "int",
-    "csv": "league_standings_data.csv",
 }
 
 SCOREBOARD_DICT = {
@@ -74,8 +76,8 @@ SCOREBOARD_DICT = {
     ).game_header.get_data_frame(),
     "main_loop_parameter": "game_date",
     "parent": LEAGUE_GAME_LOG_DICT,
-    "parent_col": "GAME_DATE_EST",
-    "current_col": "GAME_DATE",
+    "parent_col": "GAME_DATE",
+    "current_col": "GAME_DATE_EST",
     "main_col_dtype": "datetime64[ns]",
     "csv": "scoreboard_data.csv",
 }
@@ -90,6 +92,7 @@ BOX_SCORE_TRADITIONAL_DICT = {
     "parent_col": "GAME_ID",
     "current_col": "GAME_ID",
     "main_col_dtype": "int",
+    "main_col_transform": lambda x: str(x).zfill(10),
     "csv": "box_score_traditional_data.csv",
 }
 
@@ -103,6 +106,7 @@ BOX_SCORE_ADVANCED_DICT = {
     "parent_col": "GAME_ID",
     "current_col": "GAME_ID",
     "main_col_dtype": "int",
+    "main_col_transform": lambda x: str(x).zfill(10),
     "csv": "box_score_advanced_data.csv",
 }
 
@@ -110,8 +114,8 @@ LIST_OF_ENDPOINT_DICTS = [
     PLAYERS_DICT,
     TEAMS_DICT,
     DRAFT_HISTORY_DICT,
-    LEAGUE_GAME_LOG_DICT,
     LEAGUE_STANDINGS_DICT,
+    LEAGUE_GAME_LOG_DICT,
     SCOREBOARD_DICT,
     BOX_SCORE_TRADITIONAL_DICT,
     BOX_SCORE_ADVANCED_DICT,
