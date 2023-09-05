@@ -209,7 +209,9 @@ class NBAAPI:
                 return self.endpoint()
             return self.endpoint(param_dict)
 
-        data_frame = retry_api_call(api_call)
+        data_frame = retry_api_call(
+            api_call, endpoint=self.endpoint, param_dict=param_dict
+        )
         data_frame = self._add_params(data_frame, param_dict)
         return data_frame
 
