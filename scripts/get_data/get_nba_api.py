@@ -21,11 +21,11 @@ TEST_LOOPS = 2
 
 
 def retrieve_data(
-    all_dates: bool = False,
+    load_type: str = "all",
     test: bool = False,
     specific_endpoint_names: t.List[str] = None,
 ):
-    if all_dates:
+    if load_type == "all":
         _list_of_endpoint_dicts = _check_endpoint_param(
             LIST_OF_ALL_ENDPOINT_DICTS, specific_endpoint_names
         )
@@ -35,11 +35,8 @@ def retrieve_data(
         )
 
     for endpoint_dict in _list_of_endpoint_dicts:
-        query_api = NBAAPI(endpoint_dict=endpoint_dict, all_dates=all_dates, test=test)
-        if all_dates:
-            query_api.fetch_all_data()
-        else:
-            query_api.fetch_recent_data()
+        query_api = NBAAPI(endpoint_dict=endpoint_dict, load_type=load_type, test=test)
+        query_api.fetch_data()
     return
 
 
@@ -69,12 +66,12 @@ def _check_endpoint_param(
 
 class NBAAPI:
     CURRENT_DATE = pd.to_datetime("today").normalize()
+    LOAD_TYPE_MAP = {"yesterday": 1, "last_week": 7}
 
     def __init__(
         self,
         endpoint_dict,
         load_type: str = "all",
-        all_dates: bool = False,
         test: bool = False,
         data_path: str = None,
     ):
@@ -88,18 +85,16 @@ class NBAAPI:
         load_type : str, optional
             How much data to attempt to load, by default "all"
             Other options are "yesterday" and "last_week"
-        all_dates : bool, optional
-            If True, retrieve all dates for the endpoint, by default False
         test : bool, optional
             If True, only retrieve a small subset of data, by default False
         data_path : str, optional
             Path to where the data is stored, by default None
         """
         self.data_path = "./data/" if data_path is None else data_path
-        self.load_type = load_type
+        self.load_type_days = self.LOAD_TYPE_MAP.get(load_type)
         self.start_season = (
             SEASONS_DICT.get("first_season")
-            if all_dates
+            if load_type == "all"
             else SEASONS_DICT.get("current_season_year")
         )
         self.test = test
@@ -176,7 +171,7 @@ class NBAAPI:
                 f"Error occurred while reading parent CSV file: {self.parent_csv_path}\n{exc}"
             ) from exc
 
-    def fetch_all_data(self):
+    def fetch_data(self):
         """
         Retrieve data from the NBA API and save it to a CSV file
         """
@@ -186,38 +181,6 @@ class NBAAPI:
             self._save_data(data)
             self._printer(verbage=f"Data saved for {self.name}")
             return
-
-        iterable = self._get_iterable()
-
-        for i, loop_value in enumerate(iterable):
-            if self.test and (i >= TEST_LOOPS):
-                break
-
-            if self.additional_parameters is None:
-                param_dict = {self.main_loop_parameter: loop_value}
-                data = self._call_endpoint(param_dict=param_dict)
-            else:
-                for j, param_dict in enumerate(
-                    self._get_distinct_loop_combos(loop_value)
-                ):
-                    if j == 0:
-                        data = self._call_endpoint(param_dict)
-                    else:
-                        data = pd.concat(
-                            [data, self._call_endpoint(param_dict)], ignore_index=True
-                        )
-            if data.empty:
-                self._printer(i=i, verbage=f"No data for {self.name}, {param_dict}")
-                continue
-            self._save_data(data)
-            self._printer(i=i, verbage=f"Data saved for {self.name}, {param_dict}")
-        return
-
-    def fetch_recent_data(self):
-        """
-        Retrieve data from the NBA API and save it to a CSV file
-        """
-        current_season_year = SEASONS_DICT.get("current_season_year")
 
         iterable = self._get_iterable()
 
@@ -331,35 +294,25 @@ class NBAAPI:
         # filtered_loop_values = loop_values[loop_values > max_saved_loop_value]
         # return filtered_loop_values
 
-        if "date" in self.main_col_dtype:
-            if self.load_type == "yesterday":
-                loop_values = loop_values[
-                    loop_values >= self.CURRENT_DATE - pd.DateOffset(1)
-                ]
-            loop_values = pd.to_datetime(loop_values)
-        # if loop type is "all", find all values in parent loop that are not in current loop
-        if self.load_type == "all":
+        if ("date" in self.main_col_dtype) and self.load_type_days:
+            # date column and self.load_type_days is not none -> load_type is "yesterday" or "last_week"
+            # -> find all dates in parent loop that are within the last load_type_days
+            filtered_loop_values = loop_values[
+                loop_values >= self.CURRENT_DATE - pd.DateOffset(self.load_type_days)
+            ]
+            filtered_loop_values = pd.to_datetime(filtered_loop_values)
+            return filtered_loop_values
+        if not self.load_type_days:
+            # self.load_type_days is none -> load_type is "all"
+            # if loop type is "all", find all values in parent loop that are not in current loop
             mask = np.isin(loop_values, self.current_csv_data[self.current_col])
             filtered_loop_values = loop_values[~mask]
             print(
                 f"Querying the {len(filtered_loop_values)} remaining loop values between {filtered_loop_values.min()} and {filtered_loop_values.max()}"
             )
             return filtered_loop_values
-        # if loop type is "today", find data for today's date, then save to current data (overwriting duplicate rows)
-        # This load type only applies to date specific data (e.g. game log, scoreboard, box score, etc.)
-        if self.load_type == "yesterday":
-            loop_values = loop_values[
-                loop_values >= self.CURRENT_DATE - pd.DateOffset(1)
-            ]
-            return loop_values
-        # if loop type is "today", find data for this week, then save to current data (overwriting duplicate rows)
-        # This load type only applies to date specific data (e.g. game log, scoreboard, box score, etc.)
-        if self.load_type == "last_week":
-            loop_values = loop_values[
-                (loop_values >= self.CURRENT_DATE - pd.DateOffset(days=7))
-            ]
-            return loop_values
-
+        # self.load_type_days is not none -> load_type is "yesterday" or "last_week"
+        # -> find all values in parent loop (meaning we could overwrite some data)
         return loop_values
 
     @staticmethod
@@ -382,7 +335,7 @@ class NBAAPI:
 
 if __name__ == "__main__":
     retrieve_data(
-        all_dates=False,
+        load_type="all",
         test=True,
         specific_endpoint_names=[],
     )
