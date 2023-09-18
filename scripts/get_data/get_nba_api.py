@@ -67,6 +67,7 @@ def _check_endpoint_param(
 class NBAAPI:
     CURRENT_DATE = pd.to_datetime("today").normalize()
     LOAD_TYPE_MAP = {"yesterday": 1, "last_week": 7}
+    iterable = None
 
     def __init__(
         self,
@@ -178,13 +179,13 @@ class NBAAPI:
         ## TODO: add logic to check if data is already up to date
         if self.parent_dict is None:
             data = self._call_endpoint()
-            self._save_data(data)
+            self._save_data(data=data)
             self._printer(verbage=f"Data saved for {self.name}")
             return
 
-        iterable = self._get_iterable()
+        self.iterable = self._get_iterable()
 
-        for i, loop_value in enumerate(iterable):
+        for i, loop_value in enumerate(self.iterable):
             if self.test and (i >= TEST_LOOPS):
                 break
 
@@ -204,7 +205,7 @@ class NBAAPI:
             if data.empty:
                 self._printer(i=i, verbage=f"No data for {self.name}, {param_dict}")
                 continue
-            self._save_data(data)
+            self._save_data(i=i, data=data)
             self._printer(i=i, verbage=f"Data saved for {self.name}, {param_dict}")
         return
 
@@ -240,7 +241,7 @@ class NBAAPI:
         data_frame = self._add_params(data_frame, param_dict)
         return data_frame
 
-    def _save_data(self, data: pd.DataFrame):
+    def _save_data(self, data: pd.DataFrame, i: int = 0):
         if self.save_transform:
             for col, transform in self.save_transform.items():
                 data[col] = data[col].apply(transform)
@@ -257,7 +258,8 @@ class NBAAPI:
         self.current_csv_data = pd.concat(
             [self.current_csv_data, data], ignore_index=True
         )
-        self.current_csv_data.to_csv(self.current_csv_path, index=False)
+        if self.test or (i % 5 == 0) or (i >= len(self.iterable) - 5):
+            self.current_csv_data.to_csv(self.current_csv_path, index=False)
         return
 
     def _get_iterable(self) -> t.Iterable[t.Any]:
