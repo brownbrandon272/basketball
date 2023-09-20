@@ -9,7 +9,7 @@ from urllib3.exceptions import ProtocolError
 from json.decoder import JSONDecodeError
 
 MAX_RETRIES = 5
-WAIT_TIME = [5, 5, 5, 20, 120]
+WAIT_TIME = [5, 5, 10, 60, 300]
 
 
 def retry_api_call(api_call, max_retries=MAX_RETRIES, param_dict=None):
